@@ -5,9 +5,9 @@ import {
   todayKey,
   uid,
   DEFAULT_SLOT_CAPACITY,
-} from '../utils/constants'
-import { generateSlotsForDate } from '../utils/slots'
-import { calcWaste } from '../utils/wasteCalc'
+} from '../utils/constants.js'
+import { generateSlotsForDate } from '../utils/slots.js'
+import { calcWaste } from '../utils/wasteCalc.js'
 
 export const MENU_SEED_BY_OUTLET = {
   'main-food-court': [

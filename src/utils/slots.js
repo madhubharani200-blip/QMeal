@@ -8,7 +8,7 @@ import {
   DEFAULT_OUTLET_ID,
   todayKey,
   uid,
-} from './constants'
+} from './constants.js'
 
 export function generateSlotsForDate(
   dateStr = todayKey(),

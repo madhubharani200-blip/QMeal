@@ -12,12 +12,12 @@ const home = {
 }
 
 export default function Login() {
-  const { user, login, register, demoAccounts, demoMode, resetDemoData } = useAuth()
+  const { user, login, register } = useAuth()
   const [mode, setMode] = useState('login')
   const [form, setForm] = useState({
     name: '',
-    email: 'student@qmeal.demo',
-    password: 'demo1234',
+    email: '',
+    password: '',
     role: 'student',
     registrationNumber: '',
     employeeId: '',
@@ -35,30 +35,32 @@ export default function Login() {
     setBusy(true)
     try {
       if (mode === 'login') {
-        await login({ email: form.email, password: form.password })
+        if (!form.email.trim() || !form.password) {
+          throw new Error('Please enter your registered email and password.')
+        }
+        await login({ email: form.email.trim(), password: form.password })
       } else {
+        if (!form.name.trim()) {
+          throw new Error('Please enter your full name')
+        }
         if (form.role === 'student' && !form.registrationNumber.trim()) {
           throw new Error('Please provide your Student Registration Number')
         }
         if (form.role !== 'student' && !form.employeeId.trim()) {
           throw new Error('Please provide your Employee ID')
         }
-        await register(form)
+        if (!form.email.trim() || !form.password) {
+          throw new Error('Please provide a valid email and password')
+        }
+        await register({
+          ...form,
+          email: form.email.trim(),
+          registrationNumber: form.registrationNumber.trim().toUpperCase(),
+          employeeId: form.employeeId.trim().toUpperCase(),
+        })
       }
     } catch (err) {
       setError(err.message || 'Authentication failed. Please check your credentials.')
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  const quick = async (account) => {
-    setBusy(true)
-    setError('')
-    try {
-      await login(account)
-    } catch (err) {
-      setError(err.message)
     } finally {
       setBusy(false)
     }
@@ -276,43 +278,6 @@ export default function Login() {
                 {busy ? 'Processing…' : mode === 'login' ? 'Sign In to Account' : 'Create Real Account'}
               </button>
             </form>
-
-            {/* Quick-switch demo accounts panel */}
-            <div className="mt-6 border-t border-stone-800 pt-4">
-              <div className="mb-2 flex items-center justify-between text-xs">
-                <span className="font-semibold uppercase tracking-wider text-stone-400">
-                  Judge Demo Accounts (Quick-Fill)
-                </span>
-                <span className="text-[11px] text-emerald-400">Pass: demo1234</span>
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                {demoAccounts.map((a) => (
-                  <button
-                    key={a.email}
-                    type="button"
-                    disabled={busy}
-                    onClick={() => quick(a)}
-                    className="flex flex-col items-start rounded-xl border border-stone-800 bg-stone-950/60 p-2 text-left transition hover:border-emerald-500/50 hover:bg-stone-950"
-                  >
-                    <span className="flex items-center gap-1 text-xs font-bold capitalize text-white">
-                      <User className="h-3 w-3 text-emerald-400" />
-                      {a.role}
-                    </span>
-                    <span className="truncate text-[11px] text-stone-400">{a.email}</span>
-                  </button>
-                ))}
-              </div>
-              <div className="mt-3 flex items-center justify-between text-[11px] text-stone-400">
-                <button
-                  type="button"
-                  onClick={resetDemoData}
-                  className="text-stone-400 underline decoration-stone-600 hover:text-emerald-400"
-                >
-                  Reset Seeded Data
-                </button>
-                <span className="text-stone-400">All 5 Outlets Configured</span>
-              </div>
-            </div>
           </div>
         </div>
       </div>

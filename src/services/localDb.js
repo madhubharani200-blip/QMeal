@@ -120,26 +120,11 @@ export function localSignUp({
 
 export function localSignIn({ email, password }) {
   return patchDb((db) => {
-    let user = Object.values(db.users).find((u) => u.email === email && u.password === password)
+    const user = Object.values(db.users || {}).find(
+      (u) => u.email?.toLowerCase() === email?.toLowerCase() && u.password === password,
+    )
     if (!user) {
-      const demo = DEMO_ACCOUNTS.find((d) => d.email === email && d.password === password)
-      if (!demo) throw new Error('Invalid email or password')
-      const id = uid('user')
-      user = {
-        uid: id,
-        name: demo.name,
-        email: demo.email,
-        password: demo.password,
-        role: demo.role,
-        registrationNumber: demo.registrationNumber || null,
-        employeeId: demo.employeeId || null,
-        outletId: demo.outletId || null,
-        phone: '9876543210',
-        noShowCount: demo.role === 'student' ? 1 : 0,
-        totalOrders: demo.role === 'student' ? 8 : 0,
-        createdAt: new Date().toISOString(),
-      }
-      db.users[id] = user
+      throw new Error('Invalid email or password. Please check your credentials or register a new account.')
     }
     db.sessions.currentUid = user.uid
     return db
