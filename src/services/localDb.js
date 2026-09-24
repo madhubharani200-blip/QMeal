@@ -1,0 +1,142 @@
+import { DEMO_ACCOUNTS, todayKey, uid } from '../utils/constants'
+import { generateSlotsForDate } from '../utils/slots'
+import { buildSeedData } from './seedData'
+
+const STORAGE_KEY = 'qmeal_local_db_v1'
+
+function emptyDb() {
+  return {
+    users: {},
+    menuItems: {},
+    slots: {},
+    orders: {},
+    dailyStats: {},
+    sessions: { currentUid: null },
+  }
+}
+
+function load() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY)
+    if (raw) return JSON.parse(raw)
+  } catch {
+    /* ignore */
+  }
+  return null
+}
+
+function save(db) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(db))
+  window.dispatchEvent(new CustomEvent('qmeal-db'))
+}
+
+export function getDb() {
+  let db = load()
+  if (!db) {
+    db = emptyDb()
+    const seeded = buildSeedData()
+    db = { ...db, ...seeded, sessions: { currentUid: null } }
+    save(db)
+  }
+  return db
+}
+
+export function resetAndSeed() {
+  const seeded = buildSeedData()
+  const db = { ...emptyDb(), ...seeded, sessions: { currentUid: null } }
+  save(db)
+  return db
+}
+
+export function patchDb(mutator) {
+  const db = getDb()
+  const next = mutator(structuredClone(db))
+  save(next)
+  return next
+}
+
+export function subscribeDb(cb) {
+  const handler = () => cb(getDb())
+  window.addEventListener('qmeal-db', handler)
+  window.addEventListener('storage', handler)
+  return () => {
+    window.removeEventListener('qmeal-db', handler)
+    window.removeEventListener('storage', handler)
+  }
+}
+
+export function ensureTodaySlots(db) {
+  const date = todayKey()
+  const existing = Object.values(db.slots).filter((s) => s.date === date)
+  if (existing.length) return db
+  const slots = generateSlotsForDate(date)
+  slots.forEach((s) => {
+    db.slots[s.id] = s
+  })
+  return db
+}
+
+export function localSignUp({ name, email, password, role }) {
+  return patchDb((db) => {
+    const existing = Object.values(db.users).find((u) => u.email === email)
+    if (existing) throw new Error('Email already registered')
+    const id = uid('user')
+    db.users[id] = {
+      uid: id,
+      name,
+      email,
+      password,
+      role,
+      noShowCount: 0,
+      totalOrders: 0,
+      createdAt: new Date().toISOString(),
+    }
+    db.sessions.currentUid = id
+    return db
+  })
+}
+
+export function localSignIn({ email, password }) {
+  return patchDb((db) => {
+    let user = Object.values(db.users).find((u) => u.email === email && u.password === password)
+    if (!user) {
+      const demo = DEMO_ACCOUNTS.find((d) => d.email === email && d.password === password)
+      if (!demo) throw new Error('Invalid email or password')
+      const id = uid('user')
+      user = {
+        uid: id,
+        name: demo.name,
+        email: demo.email,
+        password: demo.password,
+        role: demo.role,
+        noShowCount: demo.role === 'student' ? 1 : 0,
+        totalOrders: demo.role === 'student' ? 8 : 0,
+        createdAt: new Date().toISOString(),
+      }
+      db.users[id] = user
+    }
+    db.sessions.currentUid = user.uid
+    return db
+  })
+}
+
+export function localSignOut() {
+  return patchDb((db) => {
+    db.sessions.currentUid = null
+    return db
+  })
+}
+
+export function localCurrentUser() {
+  const db = ensureTodaySlots(getDb())
+  if (!load() || !Object.keys(db.users).length) {
+    /* already seeded in getDb */
+  }
+  save(db)
+  const uidVal = db.sessions.currentUid
+  if (!uidVal) return null
+  const user = db.users[uidVal]
+  if (!user) return null
+  const { password: _, ...safe } = user
+  return safe
+}
