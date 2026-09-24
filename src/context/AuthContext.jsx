@@ -2,6 +2,8 @@ import { createContext, useContext, useEffect, useMemo, useState } from 'react'
 import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
+  signInWithPopup,
+  GoogleAuthProvider,
   signOut as fbSignOut,
   onAuthStateChanged,
   updateProfile,
@@ -11,6 +13,7 @@ import { auth, db, useFirebase } from '../services/firebase'
 import {
   localSignIn,
   localSignUp,
+  localGoogleSignIn,
   localSignOut,
   localCurrentUser,
   localUpdateProfile,
@@ -116,6 +119,33 @@ export function AuthProvider({ children }) {
     localSignIn({ email, password })
   }
 
+  const loginWithGoogle = async () => {
+    if (useFirebase && auth && db) {
+      const provider = new GoogleAuthProvider()
+      const cred = await signInWithPopup(auth, provider)
+      const fbUser = cred.user
+      const snap = await getDoc(doc(db, 'users', fbUser.uid))
+      if (!snap.exists()) {
+        const userDocData = {
+          name: fbUser.displayName || 'Google Student',
+          email: fbUser.email,
+          role: 'student',
+          registrationNumber: '21GOOG' + Math.floor(1000 + Math.random() * 9000),
+          employeeId: null,
+          outletId: null,
+          profilePictureUrl: fbUser.photoURL || null,
+          phone: fbUser.phoneNumber || '',
+          noShowCount: 0,
+          totalOrders: 0,
+          createdAt: new Date().toISOString(),
+        }
+        await setDoc(doc(db, 'users', fbUser.uid), userDocData)
+      }
+      return
+    }
+    localGoogleSignIn()
+  }
+
   const logout = async () => {
     if (useFirebase && auth) {
       await fbSignOut(auth)
@@ -145,6 +175,7 @@ export function AuthProvider({ children }) {
       loading,
       login,
       register,
+      loginWithGoogle,
       logout,
       updateUserProfile,
       refreshProfile,

@@ -131,6 +131,35 @@ export function localSignIn({ email, password }) {
   })
 }
 
+export function localGoogleSignIn() {
+  return patchDb((db) => {
+    let googleUser = Object.values(db.users || {}).find(
+      (u) => u.email === 'student.google@campus.edu',
+    )
+    if (!googleUser) {
+      const id = uid('user_google')
+      googleUser = {
+        uid: id,
+        name: 'Campus Student (Google)',
+        email: 'student.google@campus.edu',
+        password: 'google_oauth_pass',
+        role: 'student',
+        registrationNumber: '21BCE9988',
+        employeeId: null,
+        outletId: null,
+        profilePictureUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&q=80',
+        phone: '9876543210',
+        noShowCount: 0,
+        totalOrders: 3,
+        createdAt: new Date().toISOString(),
+      }
+      db.users[id] = googleUser
+    }
+    db.sessions.currentUid = googleUser.uid
+    return db
+  })
+}
+
 export function localSignOut() {
   return patchDb((db) => {
     db.sessions.currentUid = null
