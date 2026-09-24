@@ -17,6 +17,11 @@ service cloud.firestore {
       return signedIn() && role() in ['staff', 'chef', 'manager'];
     }
 
+    match /outlets/{outletId} {
+      allow read: if signedIn();
+      allow write: if isRole('manager');
+    }
+
     match /users/{uid} {
       allow read: if signedIn() && (request.auth.uid == uid || isStaffOrAbove());
       allow create: if signedIn() && request.auth.uid == uid;
@@ -30,7 +35,7 @@ service cloud.firestore {
 
     match /slots/{id} {
       allow read: if signedIn();
-      allow write: if isRole('manager') || isRole('staff') || isRole('student');
+      allow write: if signedIn();
     }
 
     match /orders/{id} {
@@ -41,6 +46,12 @@ service cloud.firestore {
       allow update: if signedIn() && (
         resource.data.studentId == request.auth.uid || isStaffOrAbove()
       );
+    }
+
+    match /reviews/{id} {
+      allow read: if signedIn();
+      allow create: if signedIn() && request.resource.data.studentId == request.auth.uid;
+      allow update, delete: if signedIn() && (resource.data.studentId == request.auth.uid || isRole('manager'));
     }
 
     match /dailyStats/{id} {
