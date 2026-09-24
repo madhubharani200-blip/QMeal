@@ -5,6 +5,11 @@ export function useOrders(filters = {}) {
   const [orders, setOrders] = useState([])
   const [loading, setLoading] = useState(true)
 
+  const outletId = filters?.outletId
+  const studentId = filters?.studentId
+  const date = filters?.date
+  const status = filters?.status
+
   useEffect(() => {
     setLoading(true)
     const unsub = subscribeOrders((list) => {
@@ -12,7 +17,7 @@ export function useOrders(filters = {}) {
       setLoading(false)
     }, filters)
     return typeof unsub === 'function' ? unsub : undefined
-  }, [filters.studentId, filters.date, filters.status])
+  }, [outletId, studentId, date, status])
 
   return { orders, loading }
 }

@@ -8,24 +8,45 @@ import {
   updateDoc,
   deleteDoc,
   onSnapshot,
+  query,
+  where,
 } from 'firebase/firestore'
-import { todayKey, uid } from '../utils/constants'
+import { todayKey, uid, DEFAULT_OUTLET_ID } from '../utils/constants'
 
-export async function listMenu() {
-  if (useFirebase) {
-    const snap = await getDocs(collection(db, 'menuItems'))
+export async function listMenu(filters = {}) {
+  if (useFirebase && db) {
+    let q = collection(db, 'menuItems')
+    if (filters.outletId) {
+      q = query(q, where('outletId', '==', filters.outletId))
+    }
+    const snap = await getDocs(q)
     return snap.docs.map((d) => ({ id: d.id, ...d.data() }))
   }
-  return Object.values(getDb().menuItems)
+
+  let items = Object.values(getDb().menuItems || {})
+  if (filters.outletId) {
+    items = items.filter((it) => it.outletId === filters.outletId)
+  }
+  return items
 }
 
-export function subscribeMenu(cb) {
-  if (useFirebase) {
-    return onSnapshot(collection(db, 'menuItems'), (snap) => {
+export function subscribeMenu(cb, filters = {}) {
+  if (useFirebase && db) {
+    let q = collection(db, 'menuItems')
+    if (filters.outletId) {
+      q = query(q, where('outletId', '==', filters.outletId))
+    }
+    return onSnapshot(q, (snap) => {
       cb(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
     })
   }
-  const emit = () => cb(Object.values(getDb().menuItems))
+  const emit = () => {
+    let items = Object.values(getDb().menuItems || {})
+    if (filters.outletId) {
+      items = items.filter((it) => it.outletId === filters.outletId)
+    }
+    cb(items)
+  }
   emit()
   return subscribeDb(emit)
 }
@@ -35,14 +56,18 @@ export async function upsertMenuItem(item) {
   const payload = {
     ...item,
     id,
+    outletId: item.outletId || DEFAULT_OUTLET_ID,
     date: item.date || todayKey(),
     isAvailable: item.isAvailable !== false,
+    avgRating: Number(item.avgRating || 4.8),
+    totalReviews: Number(item.totalReviews || 10),
   }
-  if (useFirebase) {
+  if (useFirebase && db) {
     await setDoc(doc(db, 'menuItems', id), payload, { merge: true })
     return payload
   }
   patchDb((data) => {
+    if (!data.menuItems) data.menuItems = {}
     data.menuItems[id] = { ...data.menuItems[id], ...payload }
     return data
   })
@@ -50,23 +75,25 @@ export async function upsertMenuItem(item) {
 }
 
 export async function deleteMenuItem(id) {
-  if (useFirebase) {
+  if (useFirebase && db) {
     await deleteDoc(doc(db, 'menuItems', id))
     return
   }
   patchDb((data) => {
-    delete data.menuItems[id]
+    if (data.menuItems) delete data.menuItems[id]
     return data
   })
 }
 
 export async function toggleMenuAvailability(id, isAvailable) {
-  if (useFirebase) {
+  if (useFirebase && db) {
     await updateDoc(doc(db, 'menuItems', id), { isAvailable })
     return
   }
   patchDb((data) => {
-    if (data.menuItems[id]) data.menuItems[id].isAvailable = isAvailable
+    if (data.menuItems && data.menuItems[id]) {
+      data.menuItems[id].isAvailable = isAvailable
+    }
     return data
   })
 }

@@ -6,13 +6,14 @@ import {
   onAuthStateChanged,
   updateProfile,
 } from 'firebase/auth'
-import { doc, setDoc, getDoc } from 'firebase/firestore'
+import { doc, setDoc, getDoc, updateDoc } from 'firebase/firestore'
 import { auth, db, useFirebase } from '../services/firebase'
 import {
   localSignIn,
   localSignUp,
   localSignOut,
   localCurrentUser,
+  localUpdateProfile,
   subscribeDb,
   getDb,
   resetAndSeed,
@@ -26,24 +27,34 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    if (useFirebase) {
+    if (useFirebase && auth && db) {
       const unsub = onAuthStateChanged(auth, async (fbUser) => {
         if (!fbUser) {
           setUser(null)
           setLoading(false)
           return
         }
-        const snap = await getDoc(doc(db, 'users', fbUser.uid))
-        const profile = snap.exists() ? snap.data() : {}
-        setUser({
-          uid: fbUser.uid,
-          email: fbUser.email,
-          name: profile.name || fbUser.displayName || 'User',
-          role: profile.role || 'student',
-          noShowCount: profile.noShowCount || 0,
-          totalOrders: profile.totalOrders || 0,
-        })
-        setLoading(false)
+        try {
+          const snap = await getDoc(doc(db, 'users', fbUser.uid))
+          const profile = snap.exists() ? snap.data() : {}
+          setUser({
+            uid: fbUser.uid,
+            email: fbUser.email,
+            name: profile.name || fbUser.displayName || 'User',
+            role: profile.role || 'student',
+            registrationNumber: profile.registrationNumber || null,
+            employeeId: profile.employeeId || null,
+            outletId: profile.outletId || null,
+            profilePictureUrl: profile.profilePictureUrl || fbUser.photoURL || null,
+            phone: profile.phone || '',
+            noShowCount: profile.noShowCount || 0,
+            totalOrders: profile.totalOrders || 0,
+          })
+        } catch (e) {
+          console.error('Failed to fetch user profile:', e)
+        } finally {
+          setLoading(false)
+        }
       })
       return unsub
     }
@@ -56,24 +67,49 @@ export function AuthProvider({ children }) {
     return subscribeDb(sync)
   }, [])
 
-  const register = async ({ name, email, password, role = 'student' }) => {
-    if (useFirebase) {
+  const register = async ({
+    name,
+    email,
+    password,
+    role = 'student',
+    registrationNumber = null,
+    employeeId = null,
+    outletId = null,
+    phone = null,
+  }) => {
+    if (useFirebase && auth && db) {
       const cred = await createUserWithEmailAndPassword(auth, email, password)
       await updateProfile(cred.user, { displayName: name })
-      await setDoc(doc(db, 'users', cred.user.uid), {
+      const userDocData = {
         name,
         email,
         role,
+        registrationNumber: role === 'student' ? registrationNumber : null,
+        employeeId: role !== 'student' ? employeeId : null,
+        outletId: role !== 'student' ? outletId : null,
+        profilePictureUrl: null,
+        phone: phone || '',
         noShowCount: 0,
         totalOrders: 0,
-      })
+        createdAt: new Date().toISOString(),
+      }
+      await setDoc(doc(db, 'users', cred.user.uid), userDocData)
       return
     }
-    localSignUp({ name, email, password, role })
+    localSignUp({
+      name,
+      email,
+      password,
+      role,
+      registrationNumber,
+      employeeId,
+      outletId,
+      phone,
+    })
   }
 
   const login = async ({ email, password }) => {
-    if (useFirebase) {
+    if (useFirebase && auth) {
       await signInWithEmailAndPassword(auth, email, password)
       return
     }
@@ -81,11 +117,22 @@ export function AuthProvider({ children }) {
   }
 
   const logout = async () => {
-    if (useFirebase) {
+    if (useFirebase && auth) {
       await fbSignOut(auth)
       return
     }
     localSignOut()
+  }
+
+  const updateUserProfile = async (updates) => {
+    if (!user) return
+    if (useFirebase && db) {
+      await updateDoc(doc(db, 'users', user.uid), updates)
+      setUser((prev) => ({ ...prev, ...updates }))
+      return
+    }
+    localUpdateProfile(user.uid, updates)
+    setUser((prev) => ({ ...prev, ...updates }))
   }
 
   const refreshProfile = () => {
@@ -99,6 +146,7 @@ export function AuthProvider({ children }) {
       login,
       register,
       logout,
+      updateUserProfile,
       refreshProfile,
       useFirebase,
       demoMode: !useFirebase,

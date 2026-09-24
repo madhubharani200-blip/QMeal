@@ -5,11 +5,16 @@ import {
   SLOT_MINUTES,
   CUTOFF_BEFORE_SLOT_MIN,
   DEFAULT_SLOT_CAPACITY,
+  DEFAULT_OUTLET_ID,
   todayKey,
   uid,
 } from './constants'
 
-export function generateSlotsForDate(dateStr = todayKey(), maxCapacity = DEFAULT_SLOT_CAPACITY) {
+export function generateSlotsForDate(
+  dateStr = todayKey(),
+  outletId = DEFAULT_OUTLET_ID,
+  maxCapacity = DEFAULT_SLOT_CAPACITY,
+) {
   const base = parse(`${dateStr} ${CANTEEN_OPEN}`, 'yyyy-MM-dd HH:mm', new Date())
   const end = parse(`${dateStr} ${CANTEEN_CLOSE}`, 'yyyy-MM-dd HH:mm', new Date())
   const slots = []
@@ -19,7 +24,8 @@ export function generateSlotsForDate(dateStr = todayKey(), maxCapacity = DEFAULT
     const slotEnd = addMinutes(cursor, SLOT_MINUTES)
     const cutoff = addMinutes(cursor, -CUTOFF_BEFORE_SLOT_MIN)
     slots.push({
-      id: `${dateStr}_${time.replace(':', '')}`,
+      id: `${dateStr}_${outletId}_${time.replace(':', '')}`,
+      outletId,
       time,
       date: dateStr,
       maxCapacity,

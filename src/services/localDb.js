@@ -1,15 +1,17 @@
-import { DEMO_ACCOUNTS, todayKey, uid } from '../utils/constants'
+import { DEMO_ACCOUNTS, OUTLETS, todayKey, uid, DEFAULT_SLOT_CAPACITY } from '../utils/constants'
 import { generateSlotsForDate } from '../utils/slots'
 import { buildSeedData } from './seedData'
 
-const STORAGE_KEY = 'qmeal_local_db_v1'
+const STORAGE_KEY = 'qmeal_local_db_v2'
 
 function emptyDb() {
   return {
+    outlets: {},
     users: {},
     menuItems: {},
     slots: {},
     orders: {},
+    reviews: {},
     dailyStats: {},
     sessions: { currentUid: null },
   }
@@ -32,7 +34,7 @@ function save(db) {
 
 export function getDb() {
   let db = load()
-  if (!db) {
+  if (!db || !db.outlets || !Object.keys(db.outlets).length) {
     db = emptyDb()
     const seeded = buildSeedData()
     db = { ...db, ...seeded, sessions: { currentUid: null } }
@@ -67,16 +69,31 @@ export function subscribeDb(cb) {
 
 export function ensureTodaySlots(db) {
   const date = todayKey()
-  const existing = Object.values(db.slots).filter((s) => s.date === date)
-  if (existing.length) return db
-  const slots = generateSlotsForDate(date)
-  slots.forEach((s) => {
-    db.slots[s.id] = s
+  OUTLETS.forEach((out) => {
+    const existing = Object.values(db.slots || {}).filter(
+      (s) => s.date === date && s.outletId === out.id,
+    )
+    if (!existing.length) {
+      const slots = generateSlotsForDate(date, out.id, DEFAULT_SLOT_CAPACITY)
+      slots.forEach((s) => {
+        if (!db.slots) db.slots = {}
+        db.slots[s.id] = s
+      })
+    }
   })
   return db
 }
 
-export function localSignUp({ name, email, password, role }) {
+export function localSignUp({
+  name,
+  email,
+  password,
+  role = 'student',
+  registrationNumber = null,
+  employeeId = null,
+  outletId = null,
+  phone = null,
+}) {
   return patchDb((db) => {
     const existing = Object.values(db.users).find((u) => u.email === email)
     if (existing) throw new Error('Email already registered')
@@ -87,6 +104,11 @@ export function localSignUp({ name, email, password, role }) {
       email,
       password,
       role,
+      registrationNumber: role === 'student' ? registrationNumber : null,
+      employeeId: role !== 'student' ? employeeId : null,
+      outletId: role !== 'student' ? outletId : null,
+      profilePictureUrl: null,
+      phone: phone || '',
       noShowCount: 0,
       totalOrders: 0,
       createdAt: new Date().toISOString(),
@@ -109,6 +131,10 @@ export function localSignIn({ email, password }) {
         email: demo.email,
         password: demo.password,
         role: demo.role,
+        registrationNumber: demo.registrationNumber || null,
+        employeeId: demo.employeeId || null,
+        outletId: demo.outletId || null,
+        phone: '9876543210',
         noShowCount: demo.role === 'student' ? 1 : 0,
         totalOrders: demo.role === 'student' ? 8 : 0,
         createdAt: new Date().toISOString(),
@@ -127,13 +153,19 @@ export function localSignOut() {
   })
 }
 
+export function localUpdateProfile(uidVal, updates) {
+  return patchDb((db) => {
+    const user = db.users[uidVal]
+    if (!user) throw new Error('User not found')
+    db.users[uidVal] = { ...user, ...updates }
+    return db
+  })
+}
+
 export function localCurrentUser() {
   const db = ensureTodaySlots(getDb())
-  if (!load() || !Object.keys(db.users).length) {
-    /* already seeded in getDb */
-  }
   save(db)
-  const uidVal = db.sessions.currentUid
+  const uidVal = db.sessions?.currentUid
   if (!uidVal) return null
   const user = db.users[uidVal]
   if (!user) return null
